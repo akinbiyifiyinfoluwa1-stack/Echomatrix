@@ -1,0 +1,2 @@
+# Echomatrix
+Ai trading company 
