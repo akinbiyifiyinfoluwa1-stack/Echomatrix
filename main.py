@@ -1,92 +1,20 @@
 from fastapi.responses import HTMLResponse
 from echomatrix.api import app
 
-HTML = '''<!doctype html>
-<html>
-<head>
-<meta name="viewport" content="width=device-width,initial-scale=1">
-<meta http-equiv="Cache-Control" content="no-store">
-<title>EchoMatrix Core</title>
-<style>
-body{margin:0;background:#071018;color:#eaf2f8;font:14px system-ui,sans-serif}
-header{padding:22px;border-bottom:1px solid #20303b}.wrap{max-width:1300px;margin:auto;padding:20px}
-.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:#0d1821;border:1px solid #213541;border-radius:14px;padding:16px}
-.wide{grid-column:span 2}.big{font-size:25px;font-weight:800;margin:7px 0}.muted{color:#8ca0ad}
-.row{display:flex;justify-content:space-between;gap:12px;margin:8px 0}.btn{padding:10px 12px;border:1px solid #315568;background:#10232e;color:white;border-radius:8px;cursor:pointer}
-.btn:active{transform:scale(.98)}.btn:disabled{opacity:.55}.log{max-height:190px;overflow:auto}.live{font-size:12px;margin-top:6px}.err{font-size:12px;min-height:18px;margin-top:8px}
-@media(max-width:800px){.grid{grid-template-columns:1fr 1fr}.wide{grid-column:span 2}}
-@media(max-width:520px){.grid{grid-template-columns:1fr}.wide{grid-column:span 1}}
-</style>
-</head>
-<body>
-<header>
-<b style="font-size:24px">◈ EchoMatrix Core</b>
-<div class="muted">AI-native market intelligence · strategy research · simulation</div>
-<div class="live">● LIVE SIMULATION · <span id="tick">connecting…</span></div>
-</header>
+HTML = '''<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1"><title>EchoMatrix</title><style>
+:root{color-scheme:dark}*{box-sizing:border-box}body{margin:0;background:#071018;color:#eaf2f8;font:14px system-ui,sans-serif}header{padding:20px 28px;border-bottom:1px solid #20303b;display:flex;justify-content:space-between;align-items:center}.brand{font-size:25px;font-weight:800}.muted{color:#8ca0ad}.wrap{max-width:1380px;margin:auto;padding:20px}.grid{display:grid;grid-template-columns:repeat(4,1fr);gap:14px}.card{background:#0d1821;border:1px solid #213541;border-radius:14px;padding:16px}.wide{grid-column:span 2}.big{font-size:23px;font-weight:800;margin:7px 0}.row{display:flex;justify-content:space-between;gap:12px;margin:9px 0}.btn,input,select{border:1px solid #315568;background:#10232e;color:#eaf2f8;border-radius:8px;padding:9px}.btn{cursor:pointer}.danger{border-color:#9b4848;background:#34191c}.ok{color:#7ee787}.warn{color:#f6c760}.log{max-height:210px;overflow:auto}.ticket label{display:block;margin-top:9px;color:#8ca0ad}.ticket input,.ticket select{width:100%;margin-top:3px}.ticket .row>*{width:49%}.notice{padding:9px;border-left:3px solid #d99b35;background:#211b11;color:#efd59f;font-size:12px}.status{border-radius:20px;background:#102a24;padding:7px 10px}@media(max-width:900px){.grid{grid-template-columns:1fr 1fr}.wide{grid-column:span 2}}@media(max-width:560px){header{display:block}.grid{grid-template-columns:1fr}.wide{grid-column:span 1}}</style></head><body>
+<header><div><div class="brand">◈ EchoMatrix</div><div class="muted">Market intelligence · research · simulation · Deriv execution</div></div><div class="status" id="system">● CONNECTING</div></header>
 <main class="wrap"><div class="grid">
-<div class="card"><div class="muted">MARKET REGIME</div><div id="regime" class="big">—</div><div id="opp" class="muted">—</div></div>
-<div class="card"><div class="muted">SIMULATOR EQUITY</div><div id="eq" class="big">—</div><div id="bal" class="muted">—</div></div>
-<div class="card"><div class="muted">RISK GOVERNOR</div><div id="risk" class="big">—</div><div id="rm" class="muted">—</div></div>
-<div class="card"><div class="muted">AI / DATA STATUS</div><div class="row">Gemini <b id="gem">—</b></div><div class="row">Groq <b id="groq">—</b></div><div class="row">Feed <b>SIMULATED</b></div></div>
-<div class="card wide"><h3>World Model</h3><div id="world"></div></div>
-<div class="card wide"><h3>Model Council · Evidence Fusion</h3><div id="models"></div></div>
-<div class="card"><h3>Simulator</h3>
-<button id="openBtn" class="btn" type="button">Open virtual position</button>
-<button id="stepBtn" class="btn" type="button">Step now</button>
-<div id="pos" class="log"></div><div id="err" class="err muted"></div></div>
-<div class="card"><h3>Strategy Brain</h3><div id="strat" class="log"></div></div>
-<div class="card"><h3>Memory</h3><div id="mem" class="log"></div></div>
-<div class="card"><h3>System Pipeline</h3><div class="muted">Market Data → World Model → Model Council → Evidence Fusion → Strategy Brain → Risk Governor → Simulation → Outcome → Memory</div><hr><div class="muted">Every automatic tick is simulation-only. No broker orders are enabled.</div></div>
-</div></main>
-<script>
-(function(){
-'use strict';
-const q=s=>document.querySelector(s);
-const esc=x=>String(x).replace(/[&<>\"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','\"':'&quot;',"'":'&#39;'}[c]));
-async function api(url,options){
-  const r=await fetch(url,options||{}, {cache:'no-store'});
-  if(!r.ok) throw new Error(await r.text());
-  return r.json();
-}
-function setBusy(v){q('#openBtn').disabled=v;q('#stepBtn').disabled=v;}
-async function refresh(){
-  try{
-    const d=await api('/api/dashboard?_='+Date.now()); const w=d.world;
-    q('#regime').textContent=w.regime;
-    q('#opp').textContent='Opportunity '+w.models.opportunity_score+' · uncertainty '+w.models.uncertainty;
-    q('#eq').textContent='VU '+Number(d.equity).toFixed(2);
-    q('#bal').textContent='Balance VU '+Number(d.balance).toFixed(2);
-    q('#risk').textContent=d.risk.state;
-    q('#rm').textContent='Open '+d.risk.open_positions+' / '+d.risk.max_open_positions;
-    q('#gem').textContent=d.providers.gemini?'READY':'CONFIGURE';
-    q('#groq').textContent=d.providers.groq?'READY':'CONFIGURE';
-    q('#world').innerHTML=['instrument','price','ema_fast','ema_slow','momentum','volatility','timestamp'].map(k=>'<div class="row"><span>'+esc(k)+'</span><b>'+esc(w[k])+'</b></div>').join('');
-    q('#models').innerHTML=Object.entries(w.models).map(x=>'<div class="row"><span>'+esc(x[0])+'</span><b>'+esc(x[1])+'</b></div>').join('');
-    q('#pos').innerHTML=d.positions.length?d.positions.map(p=>'<div class="row"><span>'+esc(p.symbol)+' '+esc(p.side)+' @ '+esc(p.entry)+'</span><b>'+Number(p.pnl).toFixed(3)+' <button class="btn closeBtn" data-id="'+esc(p.id)+'" type="button">Close</button></b></div>').join(''):'No open virtual positions';
-    q('#strat').innerHTML=d.strategies.map(s=>'<div class="row"><span>'+esc(s.name)+'</span><b>'+esc(s.status)+' · '+esc(s.score)+'</b></div>').join('');
-    q('#mem').innerHTML=d.memory.length?d.memory.map(m=>'<div>'+esc(m.lesson)+' · P&L '+esc(m.pnl)+'</div>').join(''):'No recorded outcomes yet';
-    q('#err').textContent=''; q('#tick').textContent='active · '+new Date().toLocaleTimeString();
-    document.querySelectorAll('.closeBtn').forEach(b=>b.addEventListener('click',()=>closeP(b.dataset.id)));
-  }catch(e){q('#err').textContent='API error: '+e.message;}
-}
-async function openP(){
-  setBusy(true); try{await api('/api/simulator/open',{method:'POST',headers:{'content-type':'application/json'},body:'{}'});await refresh();}catch(e){q('#err').textContent=e.message;}finally{setBusy(false);}
-}
-async function step(){
-  setBusy(true); try{await api('/api/simulator/step',{method:'POST'});await refresh();}catch(e){q('#err').textContent=e.message;}finally{setBusy(false);}
-}
-async function closeP(id){
-  try{await api('/api/simulator/close/'+encodeURIComponent(id),{method:'POST'});await refresh();}catch(e){q('#err').textContent=e.message;}
-}
-q('#openBtn').addEventListener('click',openP);
-q('#stepBtn').addEventListener('click',step);
-refresh();
-setInterval(step,2000);
-})();
-</script>
-</body></html>'''
+<section class="card"><div class="muted">MARKET REGIME</div><div class="big" id="regime">—</div><div class="muted" id="opp">—</div></section><section class="card"><div class="muted">SIMULATION EQUITY</div><div class="big" id="equity">—</div><div class="muted" id="balance">—</div></section><section class="card"><div class="muted">RISK GOVERNOR</div><div class="big" id="risk">—</div><div class="muted" id="riskmeta">—</div></section><section class="card"><div class="muted">EXECUTION CONTROL</div><div class="big" id="execution">—</div><div class="muted">Deriv API; explicit operator enablement required</div></section>
+<section class="card wide"><h3>World Model · Evidence Fusion</h3><div id="world"></div><hr><div id="models"></div></section>
+<section class="card ticket wide"><h3>Deriv order ticket</h3><div class="notice">Orders are real only when a Deriv token is configured and live execution is explicitly enabled. Verify the target account in Deriv before submitting.</div><div class="row"><label>Instrument<input id="symbol" value="R_100"></label><label>Direction<select id="contract"><option value="CALL">Rise (CALL)</option><option value="PUT">Fall (PUT)</option></select></label></div><div class="row"><label>Stake<input id="stake" type="number" min="0.35" step="0.01" value="1"></label><label>Duration<input id="duration" type="number" min="1" value="1"></label></div><button class="btn" onclick="quote()">Get live quote</button> <button class="btn danger" onclick="buy()">Buy on Deriv</button><div class="muted" id="ticketmsg"></div></section>
+<section class="card"><h3>Simulation</h3><button class="btn" onclick="openSim()">Open virtual position</button> <button class="btn" onclick="step()">Step market</button><div class="log" id="positions"></div></section><section class="card"><h3>Strategy Brain</h3><div class="log" id="strategies"></div></section><section class="card"><h3>Memory</h3><div class="log" id="memory"></div></section><section class="card"><h3>System boundary</h3><div class="muted">Simulation positions are internal only. Broker executions are requested from Deriv's API and the Deriv account remains the source of truth.</div></section>
+</div></main><script>
+const $=id=>document.getElementById(id), esc=x=>String(x).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+async function api(url,opt={}){let r=await fetch(url,opt);let d=await r.json();if(!r.ok)throw new Error(d.detail||'Request failed');return d}function payload(){return {symbol:$('symbol').value,contract_type:$('contract').value,stake:+$('stake').value,duration:+$('duration').value,duration_unit:'m'}}
+async function refresh(){try{let d=await api('/api/dashboard'),w=d.world,m=w.models;$('regime').textContent=w.regime;$('opp').textContent=`Opportunity ${m.opportunity_score} · uncertainty ${m.uncertainty}`;$('equity').textContent='VU '+d.equity.toFixed(2);$('balance').textContent='Balance VU '+d.balance.toFixed(2);$('risk').textContent=d.risk.state;$('riskmeta').textContent=`Open ${d.risk.open_positions} / ${d.risk.max_open_positions} · DD ${(d.risk.drawdown*100).toFixed(2)}%`;$('execution').textContent=d.execution.mode;$('system').textContent='● SYSTEM ONLINE';$('system').className='status ok';$('world').innerHTML=['instrument','price','ema_fast','ema_slow','momentum','volatility','timestamp'].map(k=>`<div class="row"><span>${esc(k)}</span><b>${esc(w[k])}</b></div>`).join('');$('models').innerHTML=Object.entries(m).filter(([k])=>k!=='evidence').map(([k,v])=>`<div class="row"><span>${esc(k)}</span><b>${esc(v)}</b></div>`).join('');$('positions').innerHTML=d.positions.length?d.positions.map(p=>`<div class="row"><span>${p.symbol} ${p.side}</span><b>${p.pnl.toFixed(2)} <button class="btn" onclick="closeSim('${p.id}')">Close</button></b></div>`).join(''):'No open virtual positions';$('strategies').innerHTML=d.strategies.map(s=>`<div class="row"><span>${esc(s.name)}</span><b>${esc(s.status)} · ${s.score}</b></div>`).join('');$('memory').innerHTML=d.memory.length?d.memory.map(x=>`<div>${esc(x.event)} · ${esc(x.lesson)}</div>`).join(''):'No recorded outcomes yet'}catch(e){$('system').textContent='● API ERROR'}}
+async function openSim(){await api('/api/simulator/open',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify({})});refresh()}async function step(){await api('/api/simulator/step',{method:'POST'});refresh()}async function closeSim(id){await api('/api/simulator/close/'+id,{method:'POST'});refresh()}async function quote(){try{let d=await api('/api/execution/quote',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload())});$('ticketmsg').textContent=`Quote ${d.proposal.ask_price} ${d.proposal.currency} · valid for this moment only`}catch(e){$('ticketmsg').textContent=e.message}}async function buy(){if(!confirm('Submit this order to the configured Deriv account?'))return;try{let d=await api('/api/execution/buy',{method:'POST',headers:{'content-type':'application/json'},body:JSON.stringify(payload())});$('ticketmsg').textContent=`Submitted. Deriv contract ID: ${d.execution.buy.contract_id}`}catch(e){$('ticketmsg').textContent=e.message}}refresh();setInterval(refresh,5000);
+</script></body></html>'''
 
 @app.get('/', response_class=HTMLResponse)
-def home():
-    return HTML
+def home(): return HTML
