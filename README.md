@@ -1,46 +1,56 @@
-# Echo Matrix
+# EchoMatrix
 
-Production-oriented AI trading infrastructure for multi-asset market intelligence and automated execution.
+Production-oriented AI market intelligence system. EchoMatrix is being built **brain first, body later**: the intelligence layer must be able to observe, reason, quantify uncertainty, remember outcomes, and evaluate strategies before broker/execution adapters become the focus.
 
-## Folder Structure
+## Current build
 
-- `backend/` FastAPI backend and orchestration logic
-- `frontend/` frontend app workspace
-- `dashboard/` dashboard specification and UI assets
-- `services/` service specs and bridge contracts
-- `data_pipeline/` ingestion and normalization modules (expand next)
-- `risk_engine/` strategy-agnostic risk modules (expand next)
-- `signal_engine/` modular signal logic (expand next)
-- `execution/` execution adapters and broker interfaces (expand next)
-- `config/` runtime and environment configuration
-- `logs/` log output mount
-- `tests/` automated tests
-- `docker/` container and compose definitions
-- `docs/` architecture and roadmap
+- `echomatrix/brain.py` — broker-agnostic decision brain, evidence fusion, confidence/uncertainty, and adaptive outcome memory.
+- `echomatrix/core.py` — market state, validation, model council, risk governor, virtual account, strategy lifecycle, and guarded Deriv boundary.
+- `echomatrix/api.py` — FastAPI surface for intelligence cycles, brain status/learning, simulation, strategy lifecycle, risk, and execution boundary.
+- `main.py` — lightweight dashboard UI.
+- `tests/test_brain.py` — decision-brain regression tests.
 
-## Quick Start
+## Brain loop
 
-1. Copy env template:
-   ```bash
-   cp .env.example .env
-   ```
-2. Run with Docker:
-   ```bash
-   docker compose -f docker/docker-compose.yml up --build
-   ```
-3. Health check:
-   ```bash
-   curl http://localhost:8000/health
-   ```
+`Market State → Feature Engine → Evidence Fusion → Decision → Simulation Outcome → Adaptive Memory → Next Decision`
 
-## API Endpoints
-- `GET /health` basic service status
-- `GET /api/v1/system/snapshot` ingestion snapshot from external providers
+The brain does **not** contain broker credentials and does not directly place orders. Execution remains a separate boundary so the intelligence can be tested independently.
 
-## Deployment (Oracle Cloud Ubuntu VM)
+## API
 
-- Install Docker and Docker Compose plugin.
-- Open ports 8000, 5432 (restricted), 6379 (restricted).
-- Use systemd unit to auto-start Docker Compose stack.
-- Place MT5 bridge host behind VPN/private subnet.
+- `GET /api/health`
+- `GET /api/dashboard`
+- `GET /api/brain`
+- `POST /api/intelligence/cycle`
+- `POST /api/brain/learn`
+- `POST /api/simulator/open`
+- `POST /api/simulator/step`
+- `POST /api/simulator/close/{position_id}`
+- `GET /api/strategies`
+- `POST /api/strategies/{strategy_id}/transition`
+- `GET /api/memory`
+- `GET /api/risk`
+- `GET /api/execution/status`
 
+## Quick start
+
+```bash
+cp .env.example .env
+docker compose -f docker/docker-compose.yml up --build
+curl http://localhost:8000/api/health
+```
+
+## Execution boundary
+
+Deriv connectivity remains explicitly gated by environment configuration. The intelligence brain can run entirely in simulation without a broker token. Live execution should only be enabled after the target account, token scope, stake limits, and operational controls have been reviewed.
+
+## Roadmap
+
+1. Brain foundation — **implemented**
+2. Persistent memory and event store
+3. Multi-asset data adapters and provenance
+4. Backtesting and walk-forward evaluation
+5. Strategy laboratory and model comparison
+6. Gemini/Groq provider adapters for research/reasoning augmentation
+7. Dashboard/body integrations
+8. Broker/execution adapters after the intelligence layer is validated
