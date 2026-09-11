@@ -1,13 +1,24 @@
-"""HTTP API for EchoMatrix.  Simulation and broker execution have distinct routes."""
+"""HTTP API for EchoMatrix. Simulation and broker execution have distinct routes."""
 from __future__ import annotations
 
 import os
 from typing import Literal
 from fastapi import FastAPI, HTTPException
+from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
 from .core import DerivClient, ModelCouncil, RiskGovernor, StrategyRegistry, StrategyStage, VirtualAccount, WorldModel, state_dict
 
 app = FastAPI(title="EchoMatrix", version="2.0.0")
+
+cors_origins = [x.strip() for x in os.getenv("CORS_ORIGINS", "https://echomatrix-dashboard-ifpi1l.v2.appdeploy.ai,http://localhost:5173").split(",") if x.strip()]
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=cors_origins,
+    allow_credentials=False,
+    allow_methods=["GET", "POST", "OPTIONS"],
+    allow_headers=["*"],
+)
+
 world, council, risk, account = WorldModel(), ModelCouncil(), RiskGovernor(), VirtualAccount()
 strategies, deriv = StrategyRegistry(), DerivClient()
 
@@ -31,16 +42,30 @@ class StrategyTransition(BaseModel):
     metrics: dict[str, float] = {}
 
 def dashboard() -> dict:
-    s = world.state; models = council.evaluate(s); governor = risk.evaluate(account.balance, account.starting_balance, len(account.positions))
+    s = world.state
+    models = council.evaluate(s)
+    governor = risk.evaluate(account.balance, account.starting_balance, len(account.positions))
     equity = account.balance + sum(p["pnl"] for p in account.positions)
-    return {"world": {**state_dict(s), "models": models, "provenance": {"source": s.source, "data_version": s.data_version, "confidence": s.confidence}, "data_issues": list(world.data_issues)}, "balance": round(account.balance, 2), "equity": round(equity, 2), "positions": account.positions, "history": account.history[-20:], "memory": account.memory[-20:], "strategies": strategies.list(), "risk": governor, "providers": {"gemini": bool(os.getenv("GEMINI_API_KEY")), "groq": bool(os.getenv("GROQ_API_KEY"))}, "execution": {"configured": deriv.configured, "enabled": deriv.enabled, "mode": "LIVE" if deriv.enabled else "LOCKED"}}
+    return {
+        "world": {**state_dict(s), "models": models, "provenance": {"source": s.source, "data_version": s.data_version, "confidence": s.confidence}, "data_issues": list(world.data_issues)},
+        "balance": round(account.balance, 2),
+        "equity": round(equity, 2),
+        "positions": account.positions,
+        "history": account.history[-20:],
+        "memory": account.memory[-20:],
+        "strategies": strategies.list(),
+        "risk": governor,
+        "providers": {"gemini": bool(os.getenv("GEMINI_API_KEY")), "groq": bool(os.getenv("GROQ_API_KEY"))},
+        "execution": {"configured": deriv.configured, "enabled": deriv.enabled, "mode": "LIVE" if deriv.enabled else "LOCKED"},
+    }
 
 @app.get("/api/health")
 def health():
     return {"status": "ok", "services": {"api": "online", "world_model": "online", "model_council": "online", "risk_governor": "online", "simulation": "online", "memory": "online", "deriv_execution": "enabled" if deriv.enabled else "locked"}}
 
 @app.get("/api/dashboard")
-def get_dashboard(): return dashboard()
+def get_dashboard():
+    return dashboard()
 
 @app.post("/api/simulator/open")
 def open_simulation(order: SimulationOrder):
@@ -51,39 +76,53 @@ def open_simulation(order: SimulationOrder):
 
 @app.post("/api/simulator/step")
 def simulation_step():
-    world.step(); account.mark(world.state.price); return dashboard()
+    world.step()
+    account.mark(world.state.price)
+    return dashboard()
 
 @app.post("/api/simulator/close/{position_id}")
 def close_simulation(position_id: str):
     closed = account.close(position_id)
-    if not closed: raise HTTPException(404, "Simulation position not found")
+    if not closed:
+        raise HTTPException(404, "Simulation position not found")
     return {"accepted": True, "closed": closed}
 
 @app.get("/api/strategies")
-def get_strategies(): return strategies.list()
+def get_strategies():
+    return strategies.list()
 
 @app.post("/api/strategies/{strategy_id}/transition")
 def transition_strategy(strategy_id: str, request: StrategyTransition):
-    try: return strategies.transition(strategy_id, request.stage, request.metrics)
-    except KeyError: raise HTTPException(404, "Strategy not found")
-    except ValueError as exc: raise HTTPException(409, str(exc))
+    try:
+        return strategies.transition(strategy_id, request.stage, request.metrics)
+    except KeyError:
+        raise HTTPException(404, "Strategy not found")
+    except ValueError as exc:
+        raise HTTPException(409, str(exc))
 
 @app.get("/api/memory")
-def get_memory(): return account.memory
+def get_memory():
+    return account.memory
 
 @app.get("/api/risk")
-def get_risk(): return risk.evaluate(account.balance, account.starting_balance, len(account.positions))
+def get_risk():
+    return risk.evaluate(account.balance, account.starting_balance, len(account.positions))
 
 @app.get("/api/execution/status")
 def execution_status():
-    try: return deriv.status()
-    except RuntimeError as exc: raise HTTPException(502, str(exc))
+    try:
+        return deriv.status()
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc))
 
 @app.post("/api/execution/quote")
 def live_quote(order: LiveOrder):
-    try: return deriv.proposal(order.symbol, order.contract_type, order.stake, order.duration, order.duration_unit)
-    except PermissionError as exc: raise HTTPException(423, str(exc))
-    except RuntimeError as exc: raise HTTPException(502, str(exc))
+    try:
+        return deriv.proposal(order.symbol, order.contract_type, order.stake, order.duration, order.duration_unit)
+    except PermissionError as exc:
+        raise HTTPException(423, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc))
 
 @app.post("/api/execution/buy")
 def live_buy(order: LiveOrder):
@@ -95,11 +134,16 @@ def live_buy(order: LiveOrder):
         buy = result.get("buy", {})
         account.memory.append({"event": "live_order_executed", "contract_id": buy.get("contract_id"), "transaction_id": buy.get("transaction_id"), "timestamp": __import__("datetime").datetime.now(__import__("datetime").timezone.utc).isoformat(), "lesson": "Deriv is the source of truth for this broker order."})
         return {"accepted": True, "quote": {"id": proposal["id"], "ask_price": proposal["ask_price"]}, "execution": result}
-    except PermissionError as exc: raise HTTPException(423, str(exc))
-    except (RuntimeError, KeyError) as exc: raise HTTPException(502, str(exc))
+    except PermissionError as exc:
+        raise HTTPException(423, str(exc))
+    except (RuntimeError, KeyError) as exc:
+        raise HTTPException(502, str(exc))
 
 @app.post("/api/execution/sell")
 def live_sell(order: CloseLiveOrder):
-    try: return {"accepted": True, "execution": deriv.sell(order.contract_id, order.price)}
-    except PermissionError as exc: raise HTTPException(423, str(exc))
-    except RuntimeError as exc: raise HTTPException(502, str(exc))
+    try:
+        return {"accepted": True, "execution": deriv.sell(order.contract_id, order.price)}
+    except PermissionError as exc:
+        raise HTTPException(423, str(exc))
+    except RuntimeError as exc:
+        raise HTTPException(502, str(exc))
