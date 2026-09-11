@@ -67,6 +67,26 @@ def health():
 def get_dashboard():
     return dashboard()
 
+@app.post("/api/intelligence/cycle")
+def intelligence_cycle():
+    """Advance the simulation market and immediately recompute the intelligence state."""
+    world.step()
+    account.mark(world.state.price)
+    state = dashboard()
+    return {
+        "accepted": True,
+        "mode": "simulation",
+        "cycle": "intelligence",
+        "market_timestamp": world.state.timestamp,
+        "decision_state": {
+            "regime": state["world"]["regime"],
+            "opportunity_score": state["world"]["models"]["opportunity_score"],
+            "uncertainty": state["world"]["models"]["uncertainty"],
+            "risk_state": state["risk"]["state"],
+        },
+        "dashboard": state,
+    }
+
 @app.post("/api/simulator/open")
 def open_simulation(order: SimulationOrder):
     governor = risk.evaluate(account.balance, account.starting_balance, len(account.positions))
